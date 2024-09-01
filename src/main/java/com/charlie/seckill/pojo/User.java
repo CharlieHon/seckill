@@ -9,7 +9,7 @@ import java.io.Serializable;
 import java.util.Date;
 
 @Data
-@TableName("seckill_name")
+@TableName("seckill_user")
 public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -46,6 +46,6 @@ public class User implements Serializable {
     /**
      * 登录次数
      */
-    private Date loginCount;
+    private Integer loginCount;
 
 }

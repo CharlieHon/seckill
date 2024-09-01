@@ -13,7 +13,7 @@ public class MD5Util {
     }
 
     // 准备一个salt
-    private static final String SALT = "UCmP7xHA";
+    private static final String SALT = "4tIY5VcX";
 
     // 加密加盐，md5(password明文+salt)
     public static String inputPassToMidPass(String inputPass) {
@@ -25,7 +25,7 @@ public class MD5Util {
 
     // 加密加盐（第二次），md5(md5(password明文+salt) + salt2)
     public static String midPassToDBPass(String midPass, String salt) {
-        String str = salt.charAt(1) + midPass + salt.charAt(5);
+        String str = salt.charAt(0) + midPass + salt.charAt(6);
         return md5(str);
     }
 
