@@ -5,7 +5,9 @@ import com.charlie.seckill.exception.GlobalException;
 import com.charlie.seckill.mapper.UserMapper;
 import com.charlie.seckill.pojo.User;
 import com.charlie.seckill.service.UserService;
+import com.charlie.seckill.util.CookieUtil;
 import com.charlie.seckill.util.MD5Util;
+import com.charlie.seckill.util.UUIDUtil;
 import com.charlie.seckill.util.ValidatorUtil;
 import com.charlie.seckill.vo.LoginVo;
 import com.charlie.seckill.vo.RespBean;
@@ -55,6 +57,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (!MD5Util.midPassToDBPass(password, user.getSalt()).equals(user.getPassword())) {
             return RespBean.error(RespBeanEnum.LOGIN_ERROR);
         }
+
+        // 用户登录成功，给每个用户生成ticket-唯一
+        String ticket = UUIDUtil.uuid();
+        // 将登录成功的用户保存到session(服务器)
+        req.getSession().setAttribute(ticket, user);
+        // 将ticket保存到cookie(浏览器)
+        CookieUtil.setCookie(req, resp, "userTicket", ticket);
 
         return RespBean.success();
     }
