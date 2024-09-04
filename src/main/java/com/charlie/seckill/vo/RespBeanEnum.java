@@ -19,6 +19,7 @@ public enum RespBeanEnum {
 
     // 登录
     LOGIN_ERROR(500210, "用户id或者密码错误"),
+    BING_ERROR(500212, "参数绑定异常"),
     MOBILE_ERROR(500211, "手机号码格式不正确"),
     MOBILE_NOT_EXIST(500213, "手机号码不存在");
     // 其它功能在需要时开发
