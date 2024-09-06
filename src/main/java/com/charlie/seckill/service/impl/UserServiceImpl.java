@@ -12,6 +12,7 @@ import com.charlie.seckill.util.ValidatorUtil;
 import com.charlie.seckill.vo.LoginVo;
 import com.charlie.seckill.vo.RespBean;
 import com.charlie.seckill.vo.RespBeanEnum;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -26,6 +27,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Resource
     private UserMapper userMapper;
+
+    // 配置RedisTemplate，操作redis
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public RespBean doLogin(LoginVo loginVo, HttpServletRequest req, HttpServletResponse resp) {
@@ -60,11 +65,33 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         // 用户登录成功，给每个用户生成ticket-唯一
         String ticket = UUIDUtil.uuid();
-        // 将登录成功的用户保存到session(服务器)
-        req.getSession().setAttribute(ticket, user);
+
+        // 原(保存session)：将登录成功的用户保存到session(服务器)，引入spring-session-data-redis后自动进行
+        //req.getSession().setAttribute(ticket, user);
+
+        // 现(保存user)：为了实现分布式session，把登录的用户存放到redis
+        redisTemplate.opsForValue().set("user:" + ticket, user);
+
         // 将ticket保存到cookie(浏览器)
         CookieUtil.setCookie(req, resp, "userTicket", ticket);
 
         return RespBean.success();
+    }
+
+    @Override
+    public User getUserByCookie(String userTicket, HttpServletRequest req, HttpServletResponse resp) {
+
+        if (!StringUtils.hasText(userTicket)) {
+            return null;
+        }
+
+        // 根据userTicket到redis获取user
+        User user = (User) redisTemplate.opsForValue().get("user:" + userTicket);
+        // 如果用户不为null，就重新设置cookie，刷新（防止过期等，根据业务需求来）
+        if (user != null) {
+            CookieUtil.setCookie(req, resp, "userTicket", userTicket);
+        }
+
+        return user;
     }
 }
