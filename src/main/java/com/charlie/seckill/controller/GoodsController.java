@@ -21,7 +21,7 @@ public class GoodsController {
     @Resource
     private UserService userService;
 
-    //// 进入商品列表页
+    //// 进入商品列表页-将user对象保存到session中，session存入redis
     //@RequestMapping("/toList")
     //public String toList(HttpSession session, Model model, @CookieValue("userTicket") String ticket) {
     //
@@ -42,26 +42,37 @@ public class GoodsController {
     //    return "goodsList";
     //}
 
-    // 进入商品列表页-2
+    //// 进入商品列表页-2(从redis中直接获取user对象)
+    //@RequestMapping("/toList")
+    //public String toList(Model model, @CookieValue("userTicket") String ticket,
+    //                     HttpServletRequest req, HttpServletResponse resp) {
+    //
+    //    // 如果cookie没有生成
+    //    if (!StringUtils.hasText(ticket)) {
+    //        return "login";
+    //    }
+    //
+    //    // 从redis中获取user信息
+    //    User user = userService.getUserByCookie(ticket, req, resp);
+    //    if (user == null) {
+    //        return "login";
+    //    }
+    //
+    //    // 将user放到model，携带给下一个模板使用
+    //    model.addAttribute("user", user);
+    //
+    //    return "goodsList";
+    //}
+
+    // 进入商品列表页3-获取浏览器传递的cookie值，进行参数解析，直接转成User对象，继续传递
     @RequestMapping("/toList")
-    public String toList(Model model, @CookieValue("userTicket") String ticket,
-                         HttpServletRequest req, HttpServletResponse resp) {
+    public String toList(Model model, User user) {
 
-        // 如果cookie没有生成
-        if (!StringUtils.hasText(ticket)) {
-            return "login";
-        }
-
-        // 从redis中获取user信息
-        User user = userService.getUserByCookie(ticket, req, resp);
         if (user == null) {
             return "login";
         }
 
-        // 将user放到model，携带给下一个模板使用
         model.addAttribute("user", user);
-
         return "goodsList";
     }
-
 }
