@@ -54,3 +54,30 @@ FROM `t_goods` AS g LEFT JOIN `t_seckill_goods` AS sg ON g.id=sg.goods_id;
 
 SELECT g.id, g.goods_name, g.goods_title, g.goods_img, g.goods_detail, g.goods_price, g.goods_stock, sg.stock_count, sg.start_date, sg.end_date 
 FROM `t_goods` AS g LEFT JOIN `t_seckill_goods` AS sg ON g.id=sg.goods_id WHERE g.id=1;
+
+-- 普通订单表，记录订单完整信息
+CREATE TABLE `t_order` (
+ `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+ `user_id` BIGINT(20) NOT NULL DEFAULT 0,
+ `goods_id` BIGINT(20) NOT NULL DEFAULT 0,
+ `delivery_addr_id` BIGINT(20) NOT NULL DEFAULT 0,
+ `goods_name` VARCHAR(16) NOT NULL DEFAULT '',
+ `goods_count` INT(11) NOT NULL DEFAULT '0',
+ `goods_price` DECIMAL(10, 2) NOT NULL DEFAULT '0.00',
+ `order_channel` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '订单渠道：1pc，2Android，3iOS',
+ `status` TINYINT(4) NOT NULL DEFAULT '0' COMMENT '订单状态：0新建未支付，1已支付，2已发货，3已收货，4已退款，5已完成',
+ `create_date` DATETIME DEFAULT NULL,
+ `pay_date` DATETIME DEFAULT NULL,
+ PRIMARY KEY(`id`)
+)ENGINE=INNODB AUTO_INCREMENT=600 DEFAULT CHARSET=utf8mb4;
+
+
+-- 秒杀订单表，记录用户id，秒杀商品id，及其订单id
+CREATE TABLE `t_seckill_order` (
+ `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
+ `user_id` BIGINT(20) NOT NULL DEFAULT 0,
+ `order_id` BIGINT(20) NOT NULL DEFAULT 0,
+ `goods_id` BIGINT(20) NOT NULL DEFAULT 0,
+ PRIMARY KEY (`id`),
+ UNIQUE KEY `seckill_uid_gid` (`user_id`, `goods_id`) USING BTREE COMMENT '用户id，商品id的唯一索引，解决同一个用户多次抢购'
+)ENGINE=INNODB AUTO_INCREMENT=`t_seckill_goods` DEFAULT CHARSET=utf8mb4;
