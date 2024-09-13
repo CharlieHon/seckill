@@ -15,6 +15,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+import java.util.Date;
 import java.util.Objects;
 
 @Controller
@@ -101,6 +102,33 @@ public class GoodsController {
         GoodsVo goodsVo = goodsService.findGoodsVoByGoodsId(goodsId);
         // 将查询到的goodsVo放入到model，携带给下一个模板使用
         model.addAttribute("goods", goodsVo);
+
+        // 说明：返回秒杀商品详情时，同时返回该商品的秒杀状态和秒杀的剩余遇见
+        // 为了配合前端展示秒杀商品的状态
+        // 1. 变量 secKillStatus 秒杀状态 0：秒杀未开始，1：秒杀进行中，2：秒杀已经结束
+        // 2. 秒杀 remainSeconds 剩余秒数 > 0 表示还有多久开始秒杀，0：秒杀进行中，-1：秒杀已经结束
+        Date startDate = goodsVo.getStartDate();    // 秒杀开始时间
+        Date endDate = goodsVo.getEndDate();        // 秒杀结束时间
+        Date nowDate = new Date();                  // 当前时间
+
+        int secKillStatus = 0;  // 秒杀状态
+        int remainSeconds = 0;  // 秒杀剩余时间
+
+        // 如果nowDate在startDate之前，说明还没有开始秒杀
+        if (nowDate.before(startDate)) {
+            // 得到还有多少秒开始秒杀
+           remainSeconds = (int) ((startDate.getTime() - nowDate.getTime()) / 1000);
+        } else if (nowDate.after(endDate)) {    // 秒杀已经结束
+            secKillStatus = 2;
+            remainSeconds = -1;
+        } else {    // 秒杀进行中
+            secKillStatus = 1;
+        }
+
+        // 将secKillStatus和remainSeconds放入到model，携带到模板页使用
+        model.addAttribute("secKillStatus", secKillStatus);
+        model.addAttribute("remainSeconds", remainSeconds);
+
         return "goodsDetail";
     }
 }
