@@ -75,7 +75,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 将ticket保存到cookie(浏览器)
         CookieUtil.setCookie(req, resp, "userTicket", ticket);
 
-        return RespBean.success();
+        // 返回生成的票据userTicket
+        return RespBean.success(ticket);
     }
 
     @Override
