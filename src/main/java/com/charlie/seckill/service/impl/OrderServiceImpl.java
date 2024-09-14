@@ -36,10 +36,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         SeckillGoods seckillGoods = seckillGoodsService.getOne(new QueryWrapper<SeckillGoods>().eq("goods_id", goodsVo.getId()));
 
         // 完成一个基本的秒杀操作[这块操作不具有原子性]，后续在高并发的情况下还会优化
+        // 1> 这里操作不具有原子性，比如说有200个请求到达这里，其中20个进行get操作时拿到的库存量是相同的，那个这20个请求只会进行一次修改
         seckillGoods.setStockCount(seckillGoods.getStockCount() - 1);
         seckillGoodsService.updateById(seckillGoods);
 
-        // 生成普通订单
+        // 生成普通订单，2> 以下代码总会执行200次，因此订单会是200个，但是只超卖10个
         Order order = new Order();
         order.setUserId(user.getId());
         order.setGoodsId(goodsVo.getId());
