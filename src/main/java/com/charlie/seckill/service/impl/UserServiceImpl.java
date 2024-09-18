@@ -95,4 +95,26 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         return user;
     }
+
+    // 更新用户的密码
+    @Override
+    public RespBean updatePassword(String userTicket, String password, HttpServletRequest req, HttpServletResponse resp) {
+        User user = getUserByCookie(userTicket, req, resp);
+        if (user == null) {
+            // 抛出异常
+            throw new GlobalException(RespBeanEnum.MOBILE_NOT_EXIST);
+        }
+
+        // 设置新密码
+        user.setPassword(MD5Util.inputPassToDBPass(password, user.getSalt()));
+        // 更新数据库
+        int i = userMapper.updateById(user);
+        if (i == 1) {   // 更新成功
+            // 删除该用户再redis中的数据
+            redisTemplate.delete("user:" + userTicket);
+            return RespBean.success();
+        }
+        // 密码更新失败
+        return RespBean.error(RespBeanEnum.PASSWORD_UPDATE_FAIL);
+    }
 }
