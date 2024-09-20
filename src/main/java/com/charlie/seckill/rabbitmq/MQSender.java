@@ -24,4 +24,15 @@ public class MQSender {
       rabbitTemplate.convertAndSend("queue", msg);
     }
 
+    // 方法：发送信息到fanout交换机
+    public void sendFanout(Object msg) {
+        log.info("fanout:发送消息-->" + msg);
+        rabbitTemplate.convertAndSend("fanoutExchange", "", msg);
+    }
+
+    // 放松消息到direct交换机，同时指定路由
+    public void sendDirect(Object msg, String routingKey) {
+        log.info("direct:发送信息-->" + msg);
+        rabbitTemplate.convertAndSend("directExchange", routingKey, msg);
+    }
 }
