@@ -35,4 +35,26 @@ public class RabbitMQHandler {
     public void direct(@PathVariable(value = "routingKey") String routingKey) {
         mqSender.sendDirect("direct:hello, charlie", routingKey);
     }
+
+    // 方法：调用消息生产者，发送消息到交换机(topicExchange)
+    @ResponseBody
+    @RequestMapping("/mq/topic/{routingKey}")
+    public void topic(@PathVariable(value = "routingKey") String routingKey) {
+        mqSender.sendTopic("topic:hello, world!", routingKey);
+    }
+
+    // 方法：调用消息生产者，发送消息到交换机(headersExchange)
+    @ResponseBody
+    @RequestMapping("/mq/headers01")
+    public void headers01() {
+        // 这条消息使两个队列都接收到
+        mqSender.sendHeader01("hello ABC");
+    }
+
+    @ResponseBody
+    @RequestMapping("/mq/headers02")
+    public void headers02() {
+        // 这条消息仅queue_headers01接收到
+        mqSender.sendHeader02("hello charlie");
+    }
 }

@@ -1,8 +1,11 @@
 package com.charlie.seckill.rabbitmq;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
+
+import java.util.Arrays;
 
 
 /**
@@ -46,5 +49,33 @@ public class MQReceiver {
     @RabbitListener(queues = "queue_direct02")
     public void receive_direct2(Object msg) {
         log.info("从队列 queue_direct02 接收到消息-->" + msg);
+    }
+
+    /*
+    ---topic---
+     */
+    @RabbitListener(queues = "queue_topic01")
+    public void receive_topic1(Object msg) {
+        log.info("从队列 queue_topic01 接收到消息-->" + msg);
+    }
+
+    @RabbitListener(queues = "queue_topic02")
+    public void receive_topic2(Object msg) {
+        log.info("从队列 queue_topic02 接收到消息-->" + msg);
+    }
+
+    /*
+    ---headers---
+     */
+    @RabbitListener(queues = "queue_headers01")
+    public void receive_header01(Message message) {
+        log.info("queue_headers01:接收到消息对象-->" + message);
+        log.info("queue_headers01:接收到消息内容-->" + new String(message.getBody()));
+    }
+
+    @RabbitListener(queues = "queue_headers02")
+    public void receive_header02(Message message) {
+        log.info("queue_headers02:接收到消息对象-->" + message);
+        log.info("queue_headers02:接收到消息内容-->" + new String(message.getBody()));
     }
 }
