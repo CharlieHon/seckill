@@ -11,13 +11,17 @@ import com.charlie.seckill.pojo.User;
 import com.charlie.seckill.service.OrderService;
 import com.charlie.seckill.service.SeckillGoodsService;
 import com.charlie.seckill.service.SeckillOrderService;
+import com.charlie.seckill.util.MD5Util;
+import com.charlie.seckill.util.UUIDUtil;
 import com.charlie.seckill.vo.GoodsVo;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import java.util.Date;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements OrderService {
@@ -58,6 +62,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 .eq("goods_id", goodsVo.getId())
                 .gt("stock_count", 0));
         if (!update) {  // 如果更新失败，说明当前商品已经没有库存，则不生产订单
+            // PRO[5.0]: 秒杀失败则根据userId+goodsId创建一个key：seckillFail:userId:goodsId
+            // redisTemplate.opsForValue().set("seckillFail:" + user.getId() + ":" + goodsVo.getId(), "fail");
             return null;
         }
 
@@ -91,5 +97,28 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         redisTemplate.opsForValue().set("order:" + user.getId() + ":" + goodsVo.getId(), seckillOrder);
 
         return order;
+    }
+
+    // 生成秒杀路径/值(唯一)
+    @Override
+    public String createPath(User user, Long goodsId) {
+        // 生成秒杀路径/值
+        String path = MD5Util.md5(UUIDUtil.uuid());
+        // 将随机生成的路径，保存到redis，设置一个超时时间60s
+        // key的设计：seckillPath:userId:goodsId
+        redisTemplate.opsForValue().set("seckillPath:" + user.getId() + ":" + goodsId, path,
+                60, TimeUnit.SECONDS);
+        return path;
+    }
+
+    // 对秒杀路径进行叫校验
+    @Override
+    public boolean checkPath(User user, Long goodsId, String path) {
+        if (user == null || goodsId < 0 || !StringUtils.hasText(path)) {
+            return false;
+        }
+        // 取出该用户秒杀该商品对应的路径
+        String redisPath = (String) redisTemplate.opsForValue().get("seckillPath:" + user.getId() + ":" + goodsId);
+        return path.equals(redisPath);
     }
 }
