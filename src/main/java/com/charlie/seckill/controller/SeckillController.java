@@ -18,6 +18,7 @@ import com.ramostear.captcha.support.CaptchaStyle;
 import com.ramostear.captcha.support.CaptchaType;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.CollectionUtils;
@@ -101,9 +102,24 @@ public class SeckillController implements InitializingBean {
     // 获取秒杀路径，与验证码校验
     @ResponseBody
     @RequestMapping("/path")
-    public RespBean getPath(User user, Long goodsId, String captcha) {
+    public RespBean getPath(User user, Long goodsId, String captcha, HttpServletRequest req) {
         if (user == null || goodsId < 0 || !StringUtils.hasText(captcha)) {
             return RespBean.error(RespBeanEnum.SESSION_ERROR);
+        }
+
+        // PRO: 秒杀接口限流防刷，加入Redis计数器，完成对用户的限流防刷
+        //  比如：在5s内访问次数超过了5次，则认为是在刷接口
+        // uri就是 localhost:8080/seckill/path的 /seckill/path
+        String uri = req.getRequestURI();
+        ValueOperations valueOperations = redisTemplate.opsForValue();
+        String key = uri + ":" + user.getId();
+        Integer count = (Integer) valueOperations.get(key);
+        if (count == null) {    // 说明还没有该key，即第一次访问。设置访问次数为1，超时时间为5秒
+            valueOperations.set(key, 1, 5, TimeUnit.SECONDS);
+        } else if (count < 5) { // 说明正常访问
+            valueOperations.increment(key);
+        } else {    // 说明用户在5秒内频繁访问，次数>=5
+            return RespBean.error(RespBeanEnum.ACCESS_LIMIT_REACHED);
         }
 
         // PRO: 增加业务逻辑，校验用户输入的验证码是否正确
