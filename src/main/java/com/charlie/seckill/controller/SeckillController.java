@@ -12,18 +12,26 @@ import com.charlie.seckill.service.SeckillOrderService;
 import com.charlie.seckill.vo.GoodsVo;
 import com.charlie.seckill.vo.RespBean;
 import com.charlie.seckill.vo.RespBeanEnum;
+import com.ramostear.captcha.HappyCaptcha;
+import com.ramostear.captcha.common.Fonts;
+import com.ramostear.captcha.support.CaptchaStyle;
+import com.ramostear.captcha.support.CaptchaType;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Controller
 @RequestMapping("/seckill")
@@ -72,12 +80,36 @@ public class SeckillController implements InitializingBean {
         });
     }
 
-    // 获取秒杀路径
+    // 生成验证码-happyCaptcha
+    @RequestMapping("/captcha")
+    public void happyCaptcha(User user, Long goodsId, HttpServletRequest req, HttpServletResponse resp) {
+        // 生成验证码，并输出。验证码默认保存到session中，key是happy-captcha
+        HappyCaptcha.require(req, resp)
+                .style(CaptchaStyle.ANIM)   // 设置样式为动画
+                .type(CaptchaType.NUMBER)   // 设置验证码内容为数字
+                .length(6)                  // 设置字符长度为6
+                .width(220)                 // 设置动画宽度为220
+                .height(80)                 // 设置动画高度为80
+                .font(Fonts.getInstance().zhFont()) // 设置汉字的字体
+                .build().finish();          // 生成并输出验证码
+        // 把验证码的值，保存到redis[考虑项目分布式]，key- captcha:userId:goodsId，验证码失效时间30s
+        redisTemplate.opsForValue().set("captcha:" + user.getId() + ":" + goodsId,
+                req.getSession().getAttribute("happy-captcha"), 30, TimeUnit.SECONDS);
+    }
+
+
+    // 获取秒杀路径，与验证码校验
     @ResponseBody
     @RequestMapping("/path")
-    public RespBean getPath(User user, Long goodsId) {
-        if (user == null || goodsId < 0) {
+    public RespBean getPath(User user, Long goodsId, String captcha) {
+        if (user == null || goodsId < 0 || !StringUtils.hasText(captcha)) {
             return RespBean.error(RespBeanEnum.SESSION_ERROR);
+        }
+
+        // PRO: 增加业务逻辑，校验用户输入的验证码是否正确
+        boolean checkCaptcha = orderService.checkCaptcha(user, goodsId, captcha);
+        if (!checkCaptcha) {    // 校验失败
+            return RespBean.error(RespBeanEnum.CAPTCHA_ERROR);
         }
 
         String path = orderService.createPath(user, goodsId);

@@ -39,6 +39,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Resource
     private RedisTemplate redisTemplate;
 
+    // 方法：验证用户输入的验证码是否正确
+    @Override
+    public boolean checkCaptcha(User user, Long goodsId, String captcha) {
+        if (user == null || goodsId < 0 || !StringUtils.hasText(captcha)) {
+            return false;
+        }
+
+        // 从redis中取出验证码
+        String redisCaptcha = (String) redisTemplate.opsForValue().get("captcha:" + user.getId() + ":" + goodsId);
+        return redisCaptcha.equals(captcha);
+    }
+
     // 完成秒杀
     @Override
     @Transactional

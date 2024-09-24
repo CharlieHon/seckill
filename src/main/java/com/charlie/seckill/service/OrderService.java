@@ -14,4 +14,7 @@ public interface OrderService extends IService<Order> {
 
     // 方法：对秒杀路径进行叫校验
     boolean checkPath(User user, Long goodsId, String path);
+
+    // 方法：验证用户输入的验证码是否正确
+    boolean checkCaptcha(User user, Long goodsId, String captcha);
 }
