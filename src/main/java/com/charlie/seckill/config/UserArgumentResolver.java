@@ -34,15 +34,18 @@ public class UserArgumentResolver implements HandlerMethodArgumentResolver {
     // 如果 supportsParameter 返回true，就执行下面的解析工作，根据业务进行编写
     @Override
     public Object resolveArgument(MethodParameter parameter, ModelAndViewContainer mavContainer, NativeWebRequest webRequest, WebDataBinderFactory binderFactory) throws Exception {
-        HttpServletRequest req = webRequest.getNativeRequest(HttpServletRequest.class);
-        HttpServletResponse resp = webRequest.getNativeResponse(HttpServletResponse.class);
+        //HttpServletRequest req = webRequest.getNativeRequest(HttpServletRequest.class);
+        //HttpServletResponse resp = webRequest.getNativeResponse(HttpServletResponse.class);
+        //
+        //String ticket = CookieUtil.getCookieValue(req, "userTicket");
+        //if (!StringUtils.hasText(ticket)) {
+        //    return null;
+        //}
+        //
+        //// 从redis获取用户，处理后的user传给 public String toList(Model model, User user);
+        //return userService.getUserByCookie(ticket, req, resp);
 
-        String ticket = CookieUtil.getCookieValue(req, "userTicket");
-        if (!StringUtils.hasText(ticket)) {
-            return null;
-        }
-
-        // 从redis获取用户，处理后的user传给 public String toList(Model model, User user);
-        return userService.getUserByCookie(ticket, req, resp);
+        // 直接从ThreadLocal中获取user对象
+        return UserContext.getUser();
     }
 }
