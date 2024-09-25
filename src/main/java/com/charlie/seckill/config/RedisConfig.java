@@ -34,14 +34,14 @@ public class RedisConfig {
         return redisTemplate;
     }
 
-    ////增加执行脚本
-    //@Bean
-    //public DefaultRedisScript<Long> script() {
-    //    DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
-    //    //设置要执行的lua脚本位置, 把lock.lua文件放在resources
-    //    redisScript.setLocation(new ClassPathResource("lock.lua"));
-    //    redisScript.setResultType(Long.class);
-    //    return redisScript;
-    //}
+    // 增加执行脚本
+    @Bean
+    public DefaultRedisScript<Long> script() {
+        DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
+        // 设置要执行的lua脚本位置, 把lock.lua文件放在resources
+        redisScript.setLocation(new ClassPathResource("lock.lua"));
+        redisScript.setResultType(Long.class);
+        return redisScript;
+    }
 }
 
