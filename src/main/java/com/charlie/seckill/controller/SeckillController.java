@@ -20,6 +20,8 @@ import com.ramostear.captcha.support.CaptchaType;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.CollectionUtils;
@@ -31,8 +33,10 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Controller
@@ -55,6 +59,10 @@ public class SeckillController implements InitializingBean {
     // 装配消息的生产者/发送者
     @Resource
     private MQSenderMessage mqSenderMessage;
+
+    // 装配RedisScript
+    @Resource
+    private RedisScript<Long> script;
 
     // 定义map，记录秒杀商品是否还有库存
     private HashMap<Long, Boolean> entryStockMap = new HashMap<>();
@@ -147,75 +155,6 @@ public class SeckillController implements InitializingBean {
         return RespBean.success(path);
     }
 
-    /**
-     * 处理用户秒杀/抢购请求
-     *
-     * @param model   携带数据到下一个页面
-     * @param user    用户
-     * @param goodsId 秒杀商品id
-     * @return 秒杀结果页面
-     * V6.0 改进版，加入秒杀地址校验，直接返回RespBean
-     */
-    @ResponseBody
-    @RequestMapping("/{path}/doSeckill")
-    public RespBean doSeckill(Model model, User user, Long goodsId, @PathVariable String path) {
-
-        // 用户没有登录
-        if (user == null) {
-            return RespBean.error(RespBeanEnum.SESSION_ERROR);
-        }
-
-        // PRO[V6.0]: 加入判断逻辑，判断用户携带路径是否正确
-        boolean b = orderService.checkPath(user, goodsId, path);
-        if (!b) {   // 校验失败，请求非法
-            return RespBean.error(RespBeanEnum.REPEAT_ERROR);
-        }
-
-        // 获取到goodsVo
-        GoodsVo goodsVo = goodsService.findGoodsVoByGoodsId(goodsId);
-
-        // 判断库存
-        if (goodsVo.getStockCount() < 1) {  // 没有库存
-            model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
-            return RespBean.error(RespBeanEnum.ENTRY_STOCK);
-        }
-
-        // 解决复购问题：判断用户是否是复购，直接到redis获取对应的秒杀订单
-        SeckillOrder seckillOrder = (SeckillOrder) redisTemplate.opsForValue().get("order:" + user.getId() + ":" + goodsId);
-        if (null != seckillOrder) { // 不为null，则说明该用户已经抢购该商品，则返回错误页面
-            return RespBean.error(RespBeanEnum.REPEAT_ERROR);
-        }
-
-        // PRO[4.0]: 对map进行判断[内存标记]，如果商品在map中已经没有库存，直接返回，无需进行redis预减
-        if (entryStockMap.get(goodsId)) {
-            return RespBean.error(RespBeanEnum.ENTRY_STOCK);
-        }
-
-        // PRO[3.0]: [!!!]库存预减需要放在复购之后，因为预减库存成功即意味着就要到db中去修改数据。如果预减成功，但是发现复购，
-        //  方法返回而没有实际到db更新数据，就会导致redis库存量与db实际库存量不匹配，可能导致库存余留
-
-        // PRO[3.0]: 库存预减，如果在redis中预减库存，发现秒杀商品已经没有了，就直接返回。
-        //  从而减少执行orderService.seckill()请求，防止线成堆积，优化秒杀/高并发
-        //  decrement()方法具有原子性[!!!]，返回减一后的结果
-        Long decrement = redisTemplate.opsForValue().decrement("seckillGoods:" + goodsId);
-        if (decrement < 0) {
-            // 说明当前商品已经没有库存
-            entryStockMap.put(goodsId, true);
-
-            // 恢复库存为0
-            redisTemplate.opsForValue().increment("seckillGoods:" + goodsId);
-            return RespBean.error(RespBeanEnum.ENTRY_STOCK);
-        }
-
-        // PRO[V5.0]: 抢购，向消息队列发送秒杀请求，实现了秒杀的异步请求。
-        //  发送秒杀消息后，立即快速返回结束[临时结果]，比如“排队中”。
-        //  客户端可以通过轮询，获取到最终结果
-        // 创建SeckillMessage对象
-        SeckillMessage seckillMessage = new SeckillMessage(user, goodsId);
-        mqSenderMessage.sendSeckillMessage(JSONUtil.toJsonStr(seckillMessage));
-        return RespBean.error(RespBeanEnum.SEC_KILL_WAIT);
-    }
-
     ///**
     // * 处理用户秒杀/抢购请求
     // *
@@ -223,18 +162,22 @@ public class SeckillController implements InitializingBean {
     // * @param user    用户
     // * @param goodsId 秒杀商品id
     // * @return 秒杀结果页面
-    // * V5.0 改进版，使用消息队列，实现秒杀的异步请求
+    // * V6.0 改进版，加入秒杀地址校验，直接返回RespBean
     // */
-    //@RequestMapping("/doSeckill")
-    //public String doSeckill(Model model, User user, Long goodsId) {
+    //@ResponseBody
+    //@RequestMapping("/{path}/doSeckill")
+    //public RespBean doSeckill(Model model, User user, Long goodsId, @PathVariable String path) {
     //
     //    // 用户没有登录
     //    if (user == null) {
-    //        return "login";
+    //        return RespBean.error(RespBeanEnum.SESSION_ERROR);
     //    }
     //
-    //    // 将user放入model，下一个模板可以使用
-    //    model.addAttribute("user", user);
+    //    // PRO[V6.0]: 加入判断逻辑，判断用户携带路径是否正确
+    //    boolean b = orderService.checkPath(user, goodsId, path);
+    //    if (!b) {   // 校验失败，请求非法
+    //        return RespBean.error(RespBeanEnum.REPEAT_ERROR);
+    //    }
     //
     //    // 获取到goodsVo
     //    GoodsVo goodsVo = goodsService.findGoodsVoByGoodsId(goodsId);
@@ -242,20 +185,18 @@ public class SeckillController implements InitializingBean {
     //    // 判断库存
     //    if (goodsVo.getStockCount() < 1) {  // 没有库存
     //        model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
-    //        return "secKillFail";   // 错误页面
+    //        return RespBean.error(RespBeanEnum.ENTRY_STOCK);
     //    }
     //
     //    // 解决复购问题：判断用户是否是复购，直接到redis获取对应的秒杀订单
     //    SeckillOrder seckillOrder = (SeckillOrder) redisTemplate.opsForValue().get("order:" + user.getId() + ":" + goodsId);
     //    if (null != seckillOrder) { // 不为null，则说明该用户已经抢购该商品，则返回错误页面
-    //        model.addAttribute("errmsg", RespBeanEnum.REPEAT_ERROR.getMessage());
-    //        return "secKillFail";
+    //        return RespBean.error(RespBeanEnum.REPEAT_ERROR);
     //    }
     //
     //    // PRO[4.0]: 对map进行判断[内存标记]，如果商品在map中已经没有库存，直接返回，无需进行redis预减
     //    if (entryStockMap.get(goodsId)) {
-    //        model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
-    //        return "secKillFail";
+    //        return RespBean.error(RespBeanEnum.ENTRY_STOCK);
     //    }
     //
     //    // PRO[3.0]: [!!!]库存预减需要放在复购之后，因为预减库存成功即意味着就要到db中去修改数据。如果预减成功，但是发现复购，
@@ -271,8 +212,7 @@ public class SeckillController implements InitializingBean {
     //
     //        // 恢复库存为0
     //        redisTemplate.opsForValue().increment("seckillGoods:" + goodsId);
-    //        model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
-    //        return "secKillFail";
+    //        return RespBean.error(RespBeanEnum.ENTRY_STOCK);
     //    }
     //
     //    // PRO[V5.0]: 抢购，向消息队列发送秒杀请求，实现了秒杀的异步请求。
@@ -281,9 +221,115 @@ public class SeckillController implements InitializingBean {
     //    // 创建SeckillMessage对象
     //    SeckillMessage seckillMessage = new SeckillMessage(user, goodsId);
     //    mqSenderMessage.sendSeckillMessage(JSONUtil.toJsonStr(seckillMessage));
-    //    model.addAttribute("errmsg", "排队中...");
-    //    return "secKillFail";
+    //    return RespBean.error(RespBeanEnum.SEC_KILL_WAIT);
     //}
+
+    /**
+     * 处理用户秒杀/抢购请求
+     *
+     * @param model   携带数据到下一个页面
+     * @param user    用户
+     * @param goodsId 秒杀商品id
+     * @return 秒杀结果页面
+     * V5.0 改进版，使用消息队列，实现秒杀的异步请求
+     */
+    @RequestMapping("/doSeckill")
+    public String doSeckill(Model model, User user, Long goodsId) {
+
+        // 用户没有登录
+        if (user == null) {
+            return "login";
+        }
+
+        // 将user放入model，下一个模板可以使用
+        model.addAttribute("user", user);
+
+        // 获取到goodsVo
+        GoodsVo goodsVo = goodsService.findGoodsVoByGoodsId(goodsId);
+
+        // 判断库存
+        if (goodsVo.getStockCount() < 1) {  // 没有库存
+            model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
+            return "secKillFail";   // 错误页面
+        }
+
+        // 解决复购问题：判断用户是否是复购，直接到redis获取对应的秒杀订单
+        SeckillOrder seckillOrder = (SeckillOrder) redisTemplate.opsForValue().get("order:" + user.getId() + ":" + goodsId);
+        if (null != seckillOrder) { // 不为null，则说明该用户已经抢购该商品，则返回错误页面
+            model.addAttribute("errmsg", RespBeanEnum.REPEAT_ERROR.getMessage());
+            return "secKillFail";
+        }
+
+        // PRO[4.0]: 对map进行判断[内存标记]，如果商品在map中已经没有库存，直接返回，无需进行redis预减
+        if (entryStockMap.get(goodsId)) {
+            model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
+            return "secKillFail";
+        }
+
+        // PRO[3.0]: [!!!]库存预减需要放在复购之后，因为预减库存成功即意味着就要到db中去修改数据。如果预减成功，但是发现复购，
+        //  方法返回而没有实际到db更新数据，就会导致redis库存量与db实际库存量不匹配，可能导致库存余留
+
+        // PRO[3.0]: 库存预减，如果在redis中预减库存，发现秒杀商品已经没有了，就直接返回。
+        //  从而减少执行orderService.seckill()请求，防止线成堆积，优化秒杀/高并发
+        //  decrement()方法具有原子性[!!!]，返回减一后的结果
+        //Long decrement = redisTemplate.opsForValue().decrement("seckillGoods:" + goodsId);
+        //if (decrement < 0) {
+        //    // 说明当前商品已经没有库存
+        //    entryStockMap.put(goodsId, true);
+        //
+        //    // 恢复库存为0
+        //    redisTemplate.opsForValue().increment("seckillGoods:" + goodsId);
+        //    model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
+        //    return "secKillFail";
+        //}
+
+        // PRO[V8.0]: 使用Redis分布式锁
+        //  1. 对于当前项目而言，使用redisTemplate.opsForValue().decrement()就可以控制抢购
+        //  2. 因为该方法具有原子性和隔离性 考虑到如果有比较多的操作，需要保证隔离性，这时就需要扩大隔离性的范围
+        // 获取锁 .setnx
+        String uuid = UUID.randomUUID().toString();
+
+        Boolean lock = redisTemplate.opsForValue().setIfAbsent("lock", uuid, 3, TimeUnit.SECONDS);
+        // lock为true，表示获取锁成功
+        if (lock) {
+
+            // 准备删除锁的脚本
+            //String script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+            //DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
+            //redisScript.setScriptText(script);
+            //redisScript.setResultType(Long.class);
+
+            // 写自己的业务，就可以有多个操作
+            Long decrement = redisTemplate.opsForValue().decrement("seckillGoods:" + goodsId);
+            if (decrement < 0) {
+                // 说明当前商品已经没有库存
+                entryStockMap.put(goodsId, true);
+                // 恢复库存为0
+                redisTemplate.opsForValue().increment("seckillGoods:" + goodsId);
+
+                // 释放锁，lua脚本
+                redisTemplate.execute(script, Arrays.asList("lock"), uuid);
+
+                model.addAttribute("errmsg", RespBeanEnum.ENTRY_STOCK.getMessage());
+                return "secKillFail";
+            }
+            // 释放锁，lua脚本
+            redisTemplate.execute(script, Arrays.asList("lock"), uuid);
+        } else {
+            // 获取锁失败，返回信息-本次抢购失败
+            model.addAttribute("errmsg", RespBeanEnum.SEC_KILL_RETRY.getMessage());
+            return "secKillFail";
+        }
+
+        // PRO[V5.0]: 抢购，向消息队列发送秒杀请求，实现了秒杀的异步请求。
+        //  发送秒杀消息后，立即快速返回结束[临时结果]，比如“排队中”。
+        //  客户端可以通过轮询，获取到最终结果
+        // 创建SeckillMessage对象
+        SeckillMessage seckillMessage = new SeckillMessage(user, goodsId);
+        mqSenderMessage.sendSeckillMessage(JSONUtil.toJsonStr(seckillMessage));
+        model.addAttribute("errmsg", "排队中...");
+        return "secKillFail";
+    }
 
     ///**
     // * 处理用户秒杀/抢购请求
