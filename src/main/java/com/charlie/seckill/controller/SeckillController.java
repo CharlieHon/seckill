@@ -1,6 +1,7 @@
 package com.charlie.seckill.controller;
 
 import cn.hutool.json.JSONUtil;
+import com.charlie.seckill.config.AccessLimit;
 import com.charlie.seckill.pojo.Order;
 import com.charlie.seckill.pojo.SeckillMessage;
 import com.charlie.seckill.pojo.SeckillOrder;
@@ -99,8 +100,22 @@ public class SeckillController implements InitializingBean {
     }
 
 
-    // 获取秒杀路径，与验证码校验
+    /**
+     * 获取秒杀路径，与验证码校验
+     * <lo>
+     *     <li>
+     *         1. 使用注解的方式完成对用户的限流防刷-通用性和灵活性提高
+     *     </li>
+     *     <li>
+     *         2. second = 5, maxCount = 5 说明在5秒内可以访问的最大次数是5次
+     *     </li>
+     *     <li>
+     *         3. needLogin=true，表示用户是否需要登录才能访问
+     *     </li>
+     * </lo>
+     */
     @ResponseBody
+    @AccessLimit(second = 5, maxCount = 5, needLogin = true)
     @RequestMapping("/path")
     public RespBean getPath(User user, Long goodsId, String captcha, HttpServletRequest req) {
         if (user == null || goodsId < 0 || !StringUtils.hasText(captcha)) {
@@ -110,17 +125,17 @@ public class SeckillController implements InitializingBean {
         // PRO: 秒杀接口限流防刷，加入Redis计数器，完成对用户的限流防刷
         //  比如：在5s内访问次数超过了5次，则认为是在刷接口
         // uri就是 localhost:8080/seckill/path的 /seckill/path
-        String uri = req.getRequestURI();
-        ValueOperations valueOperations = redisTemplate.opsForValue();
-        String key = uri + ":" + user.getId();
-        Integer count = (Integer) valueOperations.get(key);
-        if (count == null) {    // 说明还没有该key，即第一次访问。设置访问次数为1，超时时间为5秒
-            valueOperations.set(key, 1, 5, TimeUnit.SECONDS);
-        } else if (count < 5) { // 说明正常访问
-            valueOperations.increment(key);
-        } else {    // 说明用户在5秒内频繁访问，次数>=5
-            return RespBean.error(RespBeanEnum.ACCESS_LIMIT_REACHED);
-        }
+        //String uri = req.getRequestURI();
+        //ValueOperations valueOperations = redisTemplate.opsForValue();
+        //String key = uri + ":" + user.getId();
+        //Integer count = (Integer) valueOperations.get(key);
+        //if (count == null) {    // 说明还没有该key，即第一次访问。设置访问次数为1，超时时间为5秒
+        //    valueOperations.set(key, 1, 5, TimeUnit.SECONDS);
+        //} else if (count < 5) { // 说明正常访问
+        //    valueOperations.increment(key);
+        //} else {    // 说明用户在5秒内频繁访问，次数>=5
+        //    return RespBean.error(RespBeanEnum.ACCESS_LIMIT_REACHED);
+        //}
 
         // PRO: 增加业务逻辑，校验用户输入的验证码是否正确
         boolean checkCaptcha = orderService.checkCaptcha(user, goodsId, captcha);
