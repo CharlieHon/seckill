@@ -3,6 +3,7 @@ package com.charlie.seckill.config;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -15,6 +16,15 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Resource
     private UserArgumentResolver userArgumentResolver;
+
+    @Resource
+    private AccessLimitInterceptor accessLimitInterceptor;
+
+    // 注册自定义拦截器，这样才会生效
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(accessLimitInterceptor);
+    }
 
     // 静态资源加载
     @Override
